@@ -11,7 +11,7 @@ Setup
 -----
 
 * install Webots
-* install the python module DEAP
+* install the python module [DEAP](https://github.com/DEAP/deap "DEAP @ github)
 
 Getting started
 ---------------
