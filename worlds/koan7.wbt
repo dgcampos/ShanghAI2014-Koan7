@@ -41,6 +41,9 @@ DirectionalLight {
 Floor {
   size 100 100
 }
+Supervisor {
+  controller "LocomotionSupervisor"
+}
 DEF MODULE_1 Robot {
   translation 9.51732e-08 0.0269856 -2.05308e-07
   rotation -1.37759e-05 1.38288e-05 1 1.5708
@@ -159,6 +162,7 @@ DEF MODULE_1 Robot {
     mass 0.17
   }
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_2 Robot {
   translation 9.90893e-08 0.0269875 0.0969998
@@ -250,6 +254,7 @@ DEF MODULE_2 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_3 Robot {
   translation 1.01492e-07 0.0269887 0.194
@@ -341,6 +346,7 @@ DEF MODULE_3 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_4 Robot {
   translation 1.02546e-07 0.0269893 0.291
@@ -432,6 +438,7 @@ DEF MODULE_4 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_5 Robot {
   translation 1.02352e-07 0.0269893 0.388
@@ -523,6 +530,7 @@ DEF MODULE_5 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_6 Robot {
   translation 1.00908e-07 0.0269888 0.485
@@ -614,6 +622,7 @@ DEF MODULE_6 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_7 Robot {
   translation 9.81156e-08 0.0269877 0.582
@@ -705,6 +714,7 @@ DEF MODULE_7 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
 DEF MODULE_8 Robot {
   translation 9.38086e-08 0.026986 0.679
@@ -796,4 +806,5 @@ DEF MODULE_8 Robot {
   boundingObject USE BODY_GROUP
   physics USE BODY_PHYSICS
   controller "LocomotionController"
+  controllerArgs "1.0 0.0 0.0 1.0"
 }
