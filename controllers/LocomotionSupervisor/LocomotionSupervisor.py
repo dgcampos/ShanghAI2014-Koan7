@@ -1,3 +1,5 @@
+import pickle
+import time
 import numpy
 import numpy.random
 from controller import Supervisor
@@ -7,6 +9,14 @@ class LocomotionSupervisor(Supervisor):
     """
     This defines a controller that supervises the learning of locomotion based on developmental evolution.
     """
+
+    STATE_INIT_SIMULATION = 0
+    STATE_SETUP_SIMULATION = 1
+    STATE_RUN_SIMULATION = 2
+    STATE_EVALUATE_SIMULATION = 3
+    STATE_SETUP_SHOWCASE = 4
+    STATE_RUN_SHOWCASE = 5
+    STATE_SHUTDOWN = 6
 
     def __init__(self, population_size=10):
         """
@@ -28,52 +38,86 @@ class LocomotionSupervisor(Supervisor):
         self.modules += [self.getFromDef('MODULE_7')]
         self.modules += [self.getFromDef('MODULE_8')]
 
-        # Initialize population
-        self.population = numpy.empty((population_size, 8, 4))
-        self.population_size = population_size
-
-        # Create population, i.e. a list with sets of different parameters for all 8 oscillators which represent the
-        # genotype of an individual
-        for i in xrange(self.population_size):
-
-            # Scale the parameters to fit the valid interval (see p. 86 of 'Learning locomotion gait through hormone-
-            # based controller in modular robots'):
-            # - amplitude in [0,60]
-            # - offset in [-15, 15]
-            # - initial phase in [0, 360]
-            # - frequency in [0, 1.5]
-            self.population[i][0] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #1
-            self.population[i][1] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #2
-            self.population[i][2] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #3
-            self.population[i][3] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #4
-            self.population[i][4] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #5
-            self.population[i][5] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #6
-            self.population[i][6] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #7
-            self.population[i][7] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #8
-
         # Register fitness functions
-        self.fitness_functions = {'velocity': self.evaluate_velocity}
+        self.fitness_functions = {
+            'velocity': self.evaluate_velocity
+        }
 
         # Zero the robot position and timestamp
         self.robot_x = None
         self.robot_y = None
         self.robot_z = None
-        self.time_record = 0.0
+        self.time_record = None
 
-    def evaluate_velocity(self):
+        # Load configuration
+        self.config = {}
+
+        try:
+            self.load_configuration()
+
+        except IOError:
+            # If the config file doesn't exist yet, setup an initial configuration
+            self.reset_configuration(population_size)
+
+    def load_configuration(self):
         """
-        Evaluates the fitness of an individual based on its velocity.
+        Loads the supervisor configuration which contains the current state and other useful information.
+        """
+
+        with open("supervisor_config.pkl", 'rb') as config_file:
+            self.config = pickle.load(config_file)
+
+    def save_configuration(self, suffix=""):
+        """
+        Saves the supervisor configuration.
+        """
+
+        with open("supervisor_config%s.pkl" % suffix, 'wb') as config_file:
+            pickle.dump(self.config, config_file)
+
+    def reset_configuration(self, population_size=10, trials=100, runtime=20.0, step_size=64):
+        """
+        Resets the supervisor configuration.
+        """
+
+        self.config = {
+            'state': LocomotionSupervisor.STATE_INIT_SIMULATION,
+            'population_size': population_size,
+            'population': numpy.empty((population_size, 8, 1, 4)),
+            'trials': trials,
+            'current_trial': 0,
+            'runtime': runtime,
+            'step_size': step_size,
+            'showcase_time': 50.0,
+            'fitness_criterium': 'velocity',
+            'competed_individuals': [],
+            'current_individual': numpy.random.randint(population_size),
+            'individuals_evaluated': 0,
+            'fitness_values': numpy.zeros((population_size,))
+        }
+
+        self.save_configuration()
+
+    def reset_robot(self):
+        """
+        Resets the robot to its initial position and restarts all controllers including the supervisor.
+        """
+
+        self.simulationRevert()
+
+    def evaluate_velocity(self, t, velocity):
+        """
+        Evaluates the fitness of an individual based on its mean velocity.
 
         :return: a value representing the fitness of an individual
         """
 
         x, y, z = self.modules[0].getField('translation').getSFVec3f()
-        t = self.getTime()
 
-        if self.robot_x is None or self.robot_y is None or self.robot_z is None:
-            velocity = 0.0
+        if self.robot_x is None or self.robot_y is None or self.robot_z is None or self.time_record is None:
+            return velocity
         else:
-            velocity = numpy.sqrt((self.robot_x-x)**2 + (self.robot_y-y)**2 + (self.robot_z-z)**2) / t
+            velocity += numpy.sqrt((x-self.robot_x)**2 + (y-self.robot_y)**2 + (z-self.robot_z)**2) / (t-self.time_record)
 
         self.robot_x = x
         self.robot_y = y
@@ -82,130 +126,260 @@ class LocomotionSupervisor(Supervisor):
 
         return velocity
 
-    def compete_individuals(self, a, b, step_size=64, simulation_time=10, fitness_criterium='velocity'):
-        """
-        Simulates a competition between two individuals based on a specific fitness function.
-
-        :param a: first individual
-        :param b: second individual
-        :param fitness_criterium: fitness function descriptor
-        :return: winner, loser, fitness of the winner
-        """
-
-        # Initialize the oscillators with the parameters of the first individual
-        for i, module in enumerate(self.modules):
-            individual = self.population[a]
-            module.getField('controllerArgs').setSFString("%f %f %f %f" % (individual[i][0], individual[i][1], individual[i][2], individual[i][3]))
-
-        # Start the simulation of the first individual
-        print("started simulation of first individual")
-
-        duration = 0.0
-        fitness_a = 0.0
-        while True:
-            # Simulate one further step
-            self.step(step_size)
-            duration += step_size
-
-            # Quit the simulation if the simulation time is reached
-            if duration / 1000 >= simulation_time:
-                break
-
-            # Evaluate the first individual
-            fitness = self.fitness_functions[fitness_criterium]()
-            fitness_a = fitness if fitness > fitness_a else fitness_a
-
-        # Initialize the oscillators with the parameters of the second individual
-        for i, module in enumerate(self.modules):
-            individual = self.population[b]
-            module.getField('controllerArgs').setSFString("%f %f %f %f" % (individual[i][0], individual[i][1], individual[i][2], individual[i][3]))
-
-        # Start the simulation of the second individual
-        print("started simulation of second individual")
-
-        duration = 0.0
-        fitness_b = 0.0
-        while True:
-            # Simulate one further step
-            self.step(step_size)
-            duration += step_size
-
-            # Quit the simulation if the simulation time is reached
-            if duration / 1000 >= simulation_time:
-                break
-
-            # Evaluate the first individual
-            fitness = self.fitness_functions[fitness_criterium]()
-            fitness_b = fitness if fitness > fitness_b else fitness_b
-
-        # Determine the winner
-        if fitness_a > fitness_b:
-            print("individual a is the winner")
-            return a, b, fitness_a
-        else:
-            print("individual b is the winner")
-            return b, a, fitness_b
-
-    def crossover(self, winner_index, loser_index, crossover_probability=0.5):
+    def crossover(self, winner, loser, crossover_probability=0.5):
         """
         Infects the loser with some genes of the winner.
 
-        :param winner_index: index of the winner individual
-        :param loser_index: index of the loser individual
+        :param winner: index of the winner individual
+        :param loser: index of the loser individual
         """
 
         # Crossover means the winner infects specific genes of the loser by chance
         crossover_function = lambda x, y, p: x if numpy.random.uniform() < p else y
         vector_crossover_function = numpy.vectorize(crossover_function)
-        self.population[loser_index] = vector_crossover_function(self.population[winner_index], self.population[loser_index], crossover_probability)
+        self.config['population'][loser] = vector_crossover_function(self.config['population'][winner], self.config['population'][loser], crossover_probability)
 
-    def mutate(self, genome_index, average_mutations=1):
+    def mutate(self, individual, average_mutations=1):
         """
         Randomly mutates some of the genes of the individual.
 
-        :param genome_index: index of the genome of the individual
+        :param individual: index of the genome of the individual
         """
 
         # In average mutate once per round
-        mutation_probability = float(average_mutations) / float(self.population[genome_index].shape[0])
+        mutation_probability = float(average_mutations) / float(self.config['population'][individual].shape[0])
 
         # Mutate specific genes by chance...
         mutation_function = lambda x, p: x + numpy.random.normal(loc=0.0, scale=0.21) if numpy.random.uniform() < p else x
         vector_mutation_function = numpy.vectorize(mutation_function)
 
         # ... on each gene in the genome of the individual
-        self.population[genome_index] = vector_mutation_function(self.population[genome_index], mutation_probability)
+        self.config['population'][individual] = vector_mutation_function(self.config['population'][individual], mutation_probability)
 
-    def run(self, step_size=64, simulation_time=10):
+    def init_simulation(self):
+        """
+        Initializes the simulation.
+        """
+
+        print("Initialize simulation...")
+
+        # Create population, i.e. a list with sets of different parameters for all 8 oscillators which represent the
+        # genotype of an individual
+        for i in xrange(self.config['population_size']):
+
+            # Scale the parameters to fit the valid interval (see p. 86 of 'Learning locomotion gait through hormone-
+            # based controller in modular robots'):
+            # - amplitude in [0,60]
+            # - offset in [-15, 15]
+            # - initial phase in [0, 360]
+            # - frequency in [0, 1.5]
+            self.config['population'][i][0] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #1
+            self.config['population'][i][1] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #2
+            self.config['population'][i][2] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #3
+            self.config['population'][i][3] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #4
+            self.config['population'][i][4] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #5
+            self.config['population'][i][5] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #6
+            self.config['population'][i][6] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #7
+            self.config['population'][i][7] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #8
+
+        # Set next state
+        self.config['state'] = LocomotionSupervisor.STATE_SETUP_SIMULATION
+
+    def setup_simulation(self):
+        """
+        Simulates one lifetime of an individual.
+        """
+
+        print("Setup simulation...")
+
+        # Load the genotype of the first individual
+        genotype = self.config['population'][self.config['current_individual']]
+
+        # Write the oscillator configuration, i.e. a genotype, to a file which can be loaded by the oscillator node(s)
+        oscillator_configuration = {
+            'active': True,
+            'runtime': self.config['runtime'],
+            'step_size': self.config['step_size'],
+            'genotype': genotype
+        }
+
+        with open("./../LocomotionController/oscillator_config.pkl", 'wb') as config_file:
+            pickle.dump(oscillator_configuration, config_file)
+
+        # Set next state
+        self.config['state'] = LocomotionSupervisor.STATE_RUN_SIMULATION
+
+    def run_simulation(self):
+        """
+        Simulates one lifetime of an individual.
+        """
+
+        print("Run simulation...")
+
+        # Initialize the simulation time and fitness
+        t = 0.0
+        fitness = 0.0
+
+        while t <= self.config['runtime']:
+
+            # Proceed one further simulation step
+            self.step(self.config['step_size'])
+            t += float(self.config['step_size']) / 1000.0
+
+            # Measure the fitness over time
+            fitness = self.fitness_functions[self.config['fitness_criterium']](t, fitness)
+
+        # Evaluate the current individual
+        self.config['fitness_values'][self.config['current_individual']] = fitness
+
+        # Set next state
+        self.config['state'] = LocomotionSupervisor.STATE_EVALUATE_SIMULATION
+
+    def evaluate_simulation(self):
+        """
+        Evaluates the performance of the current individual during the last simulation.
+        """
+
+        if self.config['individuals_evaluated'] < 2:
+
+            print("Evaluated individual #%d with fitness %.2f..." % (self.config['current_individual'], self.config['fitness_values'][self.config['current_individual']]))
+
+            # Log simulation progress
+            self.config['individuals_evaluated'] += 1
+            self.config['competed_individuals'] += [self.config['current_individual']]
+
+            # Determine the next individual
+            next_individual = self.config['current_individual']
+
+            while next_individual == self.config['current_individual']:
+                next_individual = numpy.random.randint(self.config['population_size'])
+
+            self.config['current_individual'] = next_individual
+
+        else:
+
+            # Reset evaluation
+            self.config['individuals_evaluated'] = 0
+
+            # Compete the individuals
+            a, b = self.config['competed_individuals']
+            a_fitness = self.config['fitness_values'][a]
+            b_fitness = self.config['fitness_values'][b]
+
+            if a_fitness >= b_fitness:
+
+                # a is the winner
+                self.crossover(a, b)
+                self.mutate(b)
+
+                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial'], self.config['trials'], a, b))
+            else:
+
+                # b is the winner
+                self.crossover(b, a)
+                self.mutate(a)
+
+                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial'], self.config['trials'], b, a))
+
+            # Complete current trial
+            self.config['current_trial'] += 1
+
+        # Set next state
+        if self.config['current_trial'] < self.config['trials']:
+            self.config['state'] = LocomotionSupervisor.STATE_SETUP_SIMULATION
+        else:
+            self.config['state'] = LocomotionSupervisor.STATE_SETUP_SHOWCASE
+
+    def setup_showcase(self):
+        """
+        Prepares the showcase where the best individual is presented.
+        """
+
+        self.config['current_individual'] = numpy.argmax(self.config['fitness_values'])
+
+        # Load the genotype of the best individual
+        genotype = self.config['population'][self.config['current_individual']]
+
+        # Write the oscillator configuration, i.e. a genotype, to a file which can be loaded by the oscillator node(s)
+        oscillator_configuration = {
+            'active': True,
+            'runtime': self.config['runtime'],
+            'step_size': self.config['step_size'],
+            'genotype': genotype
+        }
+
+        with open("./../LocomotionController/oscillator_config.pkl", 'wb') as config_file:
+            pickle.dump(oscillator_configuration, config_file)
+
+        # Set next state
+        self.config['state'] = LocomotionSupervisor.STATE_RUN_SHOWCASE
+
+    def run_showcase(self):
+        """
+        Runs the showcase where the best individual is presented.
+        """
+
+        print("Run showcase...")
+
+        # Initialize the simulation time
+        t = 0.0
+
+        while t <= self.config['showcase_time']:
+
+            # Proceed one further simulation step
+            self.step(self.config['step_size'])
+            t += float(self.config['step_size']) / 1000.0
+
+        # Set next state
+        self.config['state'] = LocomotionSupervisor.STATE_SHUTDOWN
+
+    def shutdown(self):
+        """
+        Stores the current config for replay and exits the whole simulation program.
+        """
+
+        self.save_configuration(suffix=time.strftime("%Y-%m-%d_%H:%M:%S"))
+
+        self.reset_configuration()
+
+    def run(self):
         """
         Runs a differential evolution algorithm to optimize controller behavior towards optimal locomotion gates.
-
-        :param step_size: the step size for the simulation
-        :param simulation_time: the total duration of the simulation
         """
 
-        # Try to optimize the locomotion controller
-        for _ in xrange(1000):
-
-            # Pick two individuals from the population
-            a, b = numpy.random.choice(self.population.shape[0], 2)
-
-            # Run a tournament
-            winner, loser, winner_fitness = self.compete_individuals(a, b, step_size, simulation_time, fitness_criterium='velocity')
-
-            # Crossover and mutate
-            self.crossover(winner, loser)
-            self.mutate(loser)
-
-            # Report and store the current progress TODO
-            print("Genome of current winner:")
-            print("individual #%d with fitness %f" % (winner, winner_fitness))
-            print(self.population[winner])
-            print("")
-
-        # Finally present the last winner
         while True:
-            self.step()
+            if self.config['state'] is LocomotionSupervisor.STATE_INIT_SIMULATION:
+                self.init_simulation()
+                continue  # continue without restart
+
+            if self.config['state'] is LocomotionSupervisor.STATE_SETUP_SIMULATION:
+                self.setup_simulation()
+                break
+
+            if self.config['state'] is LocomotionSupervisor.STATE_RUN_SIMULATION:
+                self.run_simulation()
+                continue  # continue without restart
+
+            if self.config['state'] is LocomotionSupervisor.STATE_EVALUATE_SIMULATION:
+                self.evaluate_simulation()
+                continue  # continue without restart
+
+            if self.config['state'] is LocomotionSupervisor.STATE_SETUP_SHOWCASE:
+                self.setup_showcase()
+                break
+
+            if self.config['state'] is LocomotionSupervisor.STATE_RUN_SHOWCASE:
+                self.run_showcase()
+                continue  # continue without restart
+
+            if self.config['state'] is LocomotionSupervisor.STATE_SHUTDOWN:
+                self.shutdown()
+                return
+
+        self.save_configuration()
+
+        self.reset_robot()
+
 
 if __name__ == "__main__":
     controller = LocomotionSupervisor(population_size=10)
