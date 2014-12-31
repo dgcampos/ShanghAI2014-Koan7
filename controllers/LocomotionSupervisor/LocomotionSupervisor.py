@@ -107,7 +107,7 @@ class LocomotionSupervisor(Supervisor):
 
     def evaluate_velocity(self, t, velocity):
         """
-        Evaluates the fitness of an individual based on its mean velocity.
+        Evaluates the fitness of an individual based on its mean velocity in z-direction.
 
         :return: a value representing the fitness of an individual
         """
@@ -115,9 +115,12 @@ class LocomotionSupervisor(Supervisor):
         x, y, z = self.modules[0].getField('translation').getSFVec3f()
 
         if self.robot_x is None or self.robot_y is None or self.robot_z is None or self.time_record is None:
-            return velocity
+            pass
         else:
-            velocity += numpy.sqrt((x-self.robot_x)**2 + (y-self.robot_y)**2 + (z-self.robot_z)**2) / (t-self.time_record)
+            delta_velocity = (z - self.robot_z) / (t - self.time_record)
+            velocity += delta_velocity
+            #print("delta_velocity=%.2f, delta_z=%.2f, delta_t=%.2f" % (delta_velocity, z-self.robot_z, t-self.time_record))
+            #velocity += numpy.sqrt((x-self.robot_x)**2 + (y-self.robot_y)**2 + (z-self.robot_z)**2) / (t-self.time_record)
 
         self.robot_x = x
         self.robot_y = y
@@ -230,7 +233,7 @@ class LocomotionSupervisor(Supervisor):
             fitness = self.fitness_functions[self.config['fitness_criterium']](t, fitness)
 
         # Evaluate the current individual
-        self.config['fitness_values'][self.config['current_individual']] = fitness
+        self.config['fitness_values'][self.config['current_individual']] = numpy.abs(fitness)
 
         # Set next state
         self.config['state'] = LocomotionSupervisor.STATE_EVALUATE_SIMULATION
