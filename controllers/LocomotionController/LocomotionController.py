@@ -1,4 +1,5 @@
 import pickle
+import time
 import numpy
 from controller import Robot
 
@@ -29,20 +30,13 @@ class LocomotionController(Robot):
         self.config = {}
 
         try:
+            time.sleep(0.5)
             self.load_configuration()
 
-            print("oscillator #%d started with amplitude=%.2f, offset=%.2f, initial_phase=%.2f and frequency=%.2f." % (self.id, self.config['genotype'][self.id][0][0], self.config['genotype'][self.id][0][1], self.config['genotype'][self.id][0][2], self.config['genotype'][self.id][0][3]))
-
-        except IOError:
-
+        except:
             self.config = {
-                'active': False,
-                'runtime': 0.0,
-                'step_size': 64,
-                'genotype': numpy.zeros((8, 1, 4))
+                'active': False
             }
-
-            print("oscillator #%d started with initial configuration." % self.id)
 
     def load_configuration(self):
         """
@@ -51,14 +45,6 @@ class LocomotionController(Robot):
 
         with open("oscillator_config.pkl", 'rb') as config_file:
             self.config = pickle.load(config_file)
-
-    def save_configuration(self):
-        """
-        Saves the configuration to a file.
-        """
-
-        with open("oscillator_config.pkl", 'wb') as config_file:
-            pickle.dump(self.config, config_file)
 
     def move_oscillator(self, t):
         """
@@ -80,8 +66,9 @@ class LocomotionController(Robot):
         parameters accordingly.
         """
 
-        # Only run if configuration (file) is available
         if self.config['active'] is True:
+
+            print("oscillator #%d started with amplitude=%.2f, offset=%.2f, initial_phase=%.2f and frequency=%.2f." % (self.id, self.config['genotype'][self.id][0][0], self.config['genotype'][self.id][0][1], self.config['genotype'][self.id][0][2], self.config['genotype'][self.id][0][3]))
 
             # Initialize the simulation time
             t = 0.0

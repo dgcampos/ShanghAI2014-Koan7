@@ -1,3 +1,4 @@
+import os
 import pickle
 import time
 import numpy
@@ -10,7 +11,6 @@ class LocomotionSupervisor(Supervisor):
     This defines a controller that supervises the learning of locomotion based on developmental evolution.
     """
 
-    STATE_INIT_SIMULATION = 0
     STATE_SETUP_SIMULATION = 1
     STATE_RUN_SIMULATION = 2
     STATE_EVALUATE_SIMULATION = 3
@@ -82,7 +82,7 @@ class LocomotionSupervisor(Supervisor):
         """
 
         self.config = {
-            'state': LocomotionSupervisor.STATE_INIT_SIMULATION,
+            'state': LocomotionSupervisor.STATE_SETUP_SIMULATION,
             'population_size': population_size,
             'population': numpy.empty((population_size, 8, 1, 4)),
             'trials': trials,
@@ -98,6 +98,33 @@ class LocomotionSupervisor(Supervisor):
         }
 
         self.save_configuration()
+
+    def save_oscillator_configuration(self, active=True, runtime=0.0, step_size=64, genotype=numpy.empty((8, 1, 4))):
+        """
+        Saves an oscillator configuration to a file.
+        """
+
+        # Write the oscillator configuration, i.e. a genotype, to a file which can be loaded by the oscillator node(s)
+        oscillator_configuration = {
+            'active': active,
+            'runtime': runtime,
+            'step_size': step_size,
+            'genotype': genotype
+        }
+
+        with open("./../LocomotionController/oscillator_config.pkl", 'wb') as config_file:
+            pickle.dump(oscillator_configuration, config_file)
+
+    def reset_oscillator_configuration(self):
+        """
+        Deletes an oscillator configuration file.
+        """
+
+        try:
+            os.remove("./../LocomotionController/oscillator_config.pkl")
+
+        except Exception as e:
+            print(e)
 
     def reset_robot(self):
         """
@@ -184,7 +211,7 @@ class LocomotionSupervisor(Supervisor):
         # ... on each gene in the genome of the individual
         self.config['population'][individual] = vector_mutation_function(self.config['population'][individual], mutation_probability)
 
-    def init_simulation(self):
+    def setup_simulation(self):
         """
         Initializes the simulation.
         """
@@ -211,30 +238,6 @@ class LocomotionSupervisor(Supervisor):
             self.config['population'][i][7] = numpy.random.rand(1, 4) * numpy.array([60.0, 30.0, 360.0, 1.5]) + numpy.array([0.0, -15.0, 0.0, 0.0])  # parameters of oscillator #8
 
         # Set next state
-        self.config['state'] = LocomotionSupervisor.STATE_SETUP_SIMULATION
-
-    def setup_simulation(self):
-        """
-        Simulates one lifetime of an individual.
-        """
-
-        print("Setup simulation...")
-
-        # Load the genotype of the first individual
-        genotype = self.config['population'][self.config['current_individual']]
-
-        # Write the oscillator configuration, i.e. a genotype, to a file which can be loaded by the oscillator node(s)
-        oscillator_configuration = {
-            'active': True,
-            'runtime': self.config['runtime'],
-            'step_size': self.config['step_size'],
-            'genotype': genotype
-        }
-
-        with open("./../LocomotionController/oscillator_config.pkl", 'wb') as config_file:
-            pickle.dump(oscillator_configuration, config_file)
-
-        # Set next state
         self.config['state'] = LocomotionSupervisor.STATE_RUN_SIMULATION
 
     def run_simulation(self):
@@ -243,6 +246,12 @@ class LocomotionSupervisor(Supervisor):
         """
 
         print("Run simulation...")
+
+        # Load the genotype of the first individual
+        genotype = self.config['population'][self.config['current_individual']]
+
+        # Activate the oscillator configuration
+        self.save_oscillator_configuration(active=True, runtime=self.config['runtime'], step_size=self.config['step_size'], genotype=genotype)
 
         # Initialize the simulation time and fitness
         t = 0.0
@@ -259,6 +268,9 @@ class LocomotionSupervisor(Supervisor):
 
         # Evaluate the current individual
         self.config['fitness_values'][self.config['current_individual']] = numpy.abs(fitness)
+
+        # Delete the oscillator configuration to avoid unnecessary simulation during next state
+        self.reset_oscillator_configuration()
 
         # Set next state
         self.config['state'] = LocomotionSupervisor.STATE_EVALUATE_SIMULATION
@@ -315,7 +327,7 @@ class LocomotionSupervisor(Supervisor):
 
         # Set next state
         if self.config['current_trial'] < self.config['trials']:
-            self.config['state'] = LocomotionSupervisor.STATE_SETUP_SIMULATION
+            self.config['state'] = LocomotionSupervisor.STATE_RUN_SIMULATION
         else:
             self.config['state'] = LocomotionSupervisor.STATE_SETUP_SHOWCASE
 
@@ -377,21 +389,17 @@ class LocomotionSupervisor(Supervisor):
         """
 
         while True:
-            if self.config['state'] is LocomotionSupervisor.STATE_INIT_SIMULATION:
-                self.init_simulation()
-                continue  # continue without restart
-
             if self.config['state'] is LocomotionSupervisor.STATE_SETUP_SIMULATION:
                 self.setup_simulation()
                 break
 
             if self.config['state'] is LocomotionSupervisor.STATE_RUN_SIMULATION:
                 self.run_simulation()
-                continue  # continue without restart
+                break
 
             if self.config['state'] is LocomotionSupervisor.STATE_EVALUATE_SIMULATION:
                 self.evaluate_simulation()
-                continue  # continue without restart
+                break
 
             if self.config['state'] is LocomotionSupervisor.STATE_SETUP_SHOWCASE:
                 self.setup_showcase()
@@ -399,7 +407,7 @@ class LocomotionSupervisor(Supervisor):
 
             if self.config['state'] is LocomotionSupervisor.STATE_RUN_SHOWCASE:
                 self.run_showcase()
-                continue  # continue without restart
+                break
 
             if self.config['state'] is LocomotionSupervisor.STATE_SHUTDOWN:
                 self.shutdown()
