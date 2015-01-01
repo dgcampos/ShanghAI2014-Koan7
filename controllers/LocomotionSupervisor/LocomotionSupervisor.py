@@ -40,7 +40,8 @@ class LocomotionSupervisor(Supervisor):
 
         # Register fitness functions
         self.fitness_functions = {
-            'velocity': self.evaluate_velocity
+            'velocity': self.evaluate_velocity,
+            'distance': self.evaluate_distance
         }
 
         # Zero the robot position and timestamp
@@ -89,7 +90,7 @@ class LocomotionSupervisor(Supervisor):
             'runtime': runtime,
             'step_size': step_size,
             'showcase_time': 50.0,
-            'fitness_criterium': 'velocity',
+            'fitness_criterium': 'distance',
             'competed_individuals': [],
             'current_individual': numpy.random.randint(population_size),
             'individuals_evaluated': 0,
@@ -104,6 +105,30 @@ class LocomotionSupervisor(Supervisor):
         """
 
         self.simulationRevert()
+
+    def evaluate_distance(self, t, distance):
+        """
+        Evaluates the fitness of an individual based on its distance in z-direction.
+
+        :return: a value representing the fitness of an individual
+        """
+
+        x, y, z = self.modules[0].getField('translation').getSFVec3f()
+
+        if self.robot_x is None or self.robot_y is None or self.robot_z is None or self.time_record is None:
+            pass
+        else:
+            delta_distance = z - self.robot_z
+            distance += delta_distance
+            #print("delta_distance=%.2f, delta_z=%.2f, delta_t=%.2f" % (delta_distance, z-self.robot_z, t-self.time_record))
+            #distance += numpy.sqrt((x-self.robot_x)**2 + (y-self.robot_y)**2 + (z-self.robot_z)**2) / (t-self.time_record)
+
+        self.robot_x = x
+        self.robot_y = y
+        self.robot_z = z
+        self.time_record = t
+
+        return distance
 
     def evaluate_velocity(self, t, velocity):
         """
@@ -275,17 +300,18 @@ class LocomotionSupervisor(Supervisor):
                 self.crossover(a, b)
                 self.mutate(b)
 
-                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial'], self.config['trials'], a, b))
+                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial']+1, self.config['trials'], a, b))
             else:
 
                 # b is the winner
                 self.crossover(b, a)
                 self.mutate(a)
 
-                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial'], self.config['trials'], b, a))
+                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial']+1, self.config['trials'], b, a))
 
             # Complete current trial
             self.config['current_trial'] += 1
+            self.config['competed_individuals'] = []
 
         # Set next state
         if self.config['current_trial'] < self.config['trials']:
@@ -341,7 +367,7 @@ class LocomotionSupervisor(Supervisor):
         Stores the current config for replay and exits the whole simulation program.
         """
 
-        self.save_configuration(suffix=time.strftime("%Y-%m-%d_%H:%M:%S"))
+        self.save_configuration(suffix="_%s" % time.strftime("%Y-%m-%d_%H:%M:%S"))
 
         self.reset_configuration()
 
