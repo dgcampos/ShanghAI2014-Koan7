@@ -11,9 +11,10 @@ class LocomotionSupervisor(Supervisor):
     This defines a controller that supervises the learning of locomotion based on developmental evolution.
     """
 
-    STATE_SETUP_SIMULATION = 1
-    STATE_RUN_SIMULATION = 2
-    STATE_EVALUATE_SIMULATION = 3
+    STATE_SETUP_SIMULATION = 0
+    STATE_RUN_SIMULATION = 1
+    STATE_EVALUATE_SIMULATION = 2
+    STATE_COMPETE_INDIVIDUALS = 3
     STATE_SETUP_SHOWCASE = 4
     STATE_RUN_SHOWCASE = 5
     STATE_SHUTDOWN = 6
@@ -76,7 +77,7 @@ class LocomotionSupervisor(Supervisor):
         with open("supervisor_config%s.pkl" % suffix, 'wb') as config_file:
             pickle.dump(self.config, config_file)
 
-    def reset_configuration(self, population_size=10, trials=100, runtime=20.0, step_size=64):
+    def reset_configuration(self, population_size=10, trials=100, runtime=30.0, step_size=64):
         """
         Resets the supervisor configuration.
         """
@@ -194,7 +195,7 @@ class LocomotionSupervisor(Supervisor):
         vector_crossover_function = numpy.vectorize(crossover_function)
         self.config['population'][loser] = vector_crossover_function(self.config['population'][winner], self.config['population'][loser], crossover_probability)
 
-    def mutate(self, individual, average_mutations=1):
+    def mutate(self, individual, average_mutations=3):
         """
         Randomly mutates some of the genes of the individual.
 
@@ -280,50 +281,56 @@ class LocomotionSupervisor(Supervisor):
         Evaluates the performance of the current individual during the last simulation.
         """
 
+        print("Evaluated individual #%d with fitness %.2f..." % (self.config['current_individual'], self.config['fitness_values'][self.config['current_individual']]))
+
+        # Log simulation progress
+        self.config['individuals_evaluated'] += 1
+        self.config['competed_individuals'] += [self.config['current_individual']]
+
+        # Determine the next individual
+        next_individual = self.config['current_individual']
+
+        while next_individual == self.config['current_individual']:
+            next_individual = numpy.random.randint(self.config['population_size'])
+
+        self.config['current_individual'] = next_individual
+
         if self.config['individuals_evaluated'] < 2:
+            self.config['state'] = LocomotionSupervisor.STATE_RUN_SIMULATION
+        else:
+            self.config['state'] = LocomotionSupervisor.STATE_COMPETE_INDIVIDUALS
 
-            print("Evaluated individual #%d with fitness %.2f..." % (self.config['current_individual'], self.config['fitness_values'][self.config['current_individual']]))
+    def compete_individuals(self):
+        """
+        Competes two individuals according to their simulation performance.
+        """
 
-            # Log simulation progress
-            self.config['individuals_evaluated'] += 1
-            self.config['competed_individuals'] += [self.config['current_individual']]
+        # Reset evaluation
+        self.config['individuals_evaluated'] = 0
 
-            # Determine the next individual
-            next_individual = self.config['current_individual']
+        # Compete the individuals
+        a, b = self.config['competed_individuals']
+        a_fitness = self.config['fitness_values'][a]
+        b_fitness = self.config['fitness_values'][b]
 
-            while next_individual == self.config['current_individual']:
-                next_individual = numpy.random.randint(self.config['population_size'])
+        if a_fitness >= b_fitness:
 
-            self.config['current_individual'] = next_individual
+            # a is the winner
+            self.crossover(a, b)
+            self.mutate(b)
 
+            print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial']+1, self.config['trials'], a, b))
         else:
 
-            # Reset evaluation
-            self.config['individuals_evaluated'] = 0
+            # b is the winner
+            self.crossover(b, a)
+            self.mutate(a)
 
-            # Compete the individuals
-            a, b = self.config['competed_individuals']
-            a_fitness = self.config['fitness_values'][a]
-            b_fitness = self.config['fitness_values'][b]
+            print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial']+1, self.config['trials'], b, a))
 
-            if a_fitness >= b_fitness:
-
-                # a is the winner
-                self.crossover(a, b)
-                self.mutate(b)
-
-                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial']+1, self.config['trials'], a, b))
-            else:
-
-                # b is the winner
-                self.crossover(b, a)
-                self.mutate(a)
-
-                print("Completed trial %d/%d with individual #%d as winner and %d as loser..." % (self.config['current_trial']+1, self.config['trials'], b, a))
-
-            # Complete current trial
-            self.config['current_trial'] += 1
-            self.config['competed_individuals'] = []
+        # Complete current trial
+        self.config['current_trial'] += 1
+        self.config['competed_individuals'] = []
 
         # Set next state
         if self.config['current_trial'] < self.config['trials']:
@@ -399,6 +406,10 @@ class LocomotionSupervisor(Supervisor):
 
             if self.config['state'] is LocomotionSupervisor.STATE_EVALUATE_SIMULATION:
                 self.evaluate_simulation()
+                break
+
+            if self.config['state'] is LocomotionSupervisor.STATE_COMPETE_INDIVIDUALS:
+                self.compete_individuals()
                 break
 
             if self.config['state'] is LocomotionSupervisor.STATE_SETUP_SHOWCASE:
