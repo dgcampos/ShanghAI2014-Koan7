@@ -14,11 +14,12 @@ static double t = 0.0;                 /* time elapsed since simulation start [s
 /* each module is equipped with a single motormotor and 2 connectors */
 static WbDeviceTag motor, rear_connector, front_connector;
 
-double amplitude, offset, phase, frequency;
+static double amplitude, offset, phase, frequency;
 
 void updateJoint()
 {
-
+  double next_joint_deg = amplitude * sin(2*M_PI*frequency*t + phase)+ offset;
+  wb_motor_set_position(motor, M_PI*next_joint_deg/180.0 );
 }
 
 int main() {
@@ -33,7 +34,7 @@ int main() {
   const char *name = wb_robot_get_name();
   char * file_name = (char *) malloc((strlen(name)+4)*sizeof(char));
   sprintf(file_name, "%s.txt", name);
-  
+    
   /* Open file */
   FILE * file =fopen(file_name, "r");  
   /* If open, read parameters */
@@ -42,8 +43,8 @@ int main() {
   
   char * buffer = NULL;
   char * last = NULL;
-  int size = 0;
-  getline(buffer, size, file);
+  size_t size = 0;
+  getline(&buffer, &size, file);
 
   amplitude = strtod(buffer, &last );
   offset = strtod(last, &last);
@@ -52,14 +53,14 @@ int main() {
 
   /* Close file */
   fclose(file);
-
+    
   /* find hardware devices */
   motor           = wb_robot_get_device("motor");
   rear_connector  = wb_robot_get_device("rear_connector");
   front_connector = wb_robot_get_device("front_connector");
 
   while(wb_robot_step(CONTROL_STEP)!=-1)
- {
+  {    
     updateJoint();
 
     /* computed elapsed time */

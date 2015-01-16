@@ -16,7 +16,7 @@ int main()
    }
     
     while(1) {
-        wb_robot_step(20);
+        wb_robot_step(32);
     }
 
     wb_robot_cleanup();
