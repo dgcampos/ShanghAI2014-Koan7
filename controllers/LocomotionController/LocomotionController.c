@@ -35,10 +35,23 @@ int main() {
   sprintf(file_name, "%s.txt", name);
   
   /* Open file */
-  
+  FILE * file =fopen(file_name, "r");  
   /* If open, read parameters */
+  if(file == NULL)
+	return 1;
   
+  char * buffer = NULL;
+  char * last = NULL;
+  int size = 0;
+  getline(buffer, size, file);
+
+  amplitude = strtod(buffer, &last );
+  offset = strtod(last, &last);
+  phase = strtod(last, &last);
+  frequency = strtod(last, NULL);
+
   /* Close file */
+  fclose(file);
 
   /* find hardware devices */
   motor           = wb_robot_get_device("motor");
