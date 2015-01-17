@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<ECF>
+	<Algorithm>
+		<RouletteWheel>
+			<Entry key="crxprob">
+				0.5
+			</Entry>
+			          
+			<Entry key="selpressure">
+				10
+			</Entry>
+		</RouletteWheel>
+	</Algorithm>
+	<Genotype>
+		<FloatingPoint>
+			<Entry key="lbound">-1</Entry>
+			<Entry key="ubound">1</Entry>
+			<Entry key="dimension">25</Entry>
+			<Entry key="mut.simple">0.05</Entry>
+			<Entry key="crx.arithmetic">1</Entry>	
+		</FloatingPoint> 
+	</Genotype>
+
+	<Registry>
+		<Entry key="population.size">40</Entry>
+		<Entry key="term.maxgen">50</Entry>
+		<Entry key="log.level">5</Entry>
+		<Entry key="log.filename">log.txt</Entry>
+		<Entry key="log.frequency">1</Entry>
+		<Entry key="milestone.filename">milestonefile.txt</Entry>
+		<Entry key="milestone.interval">1</Entry>
+
+		<Entry key="robot.modules">8</Entry>
+		<Entry key="robot.runtime">30000</Entry>
+		<Entry key="robot.timestep">25</Entry>
+		<Entry key="robot.simulationCommand">dummy-answer</Entry>
+		<Entry key="robot.parameterFilesFolder">../../controllers/</Entry>
+		<Entry key="robot.parameterFilesPrefix">module_</Entry>
+
+		<Entry key="osc.maxamplitude">60</Entry>
+		<Entry key="osc.maxoffset">15</Entry>
+		<Entry key="osc.maxphase">360</Entry>
+		<Entry key="osc.maxfrequency">1.5</Entry>
+	</Registry>
+	
+
+</ECF>

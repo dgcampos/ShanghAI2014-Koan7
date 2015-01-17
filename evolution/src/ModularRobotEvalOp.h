@@ -4,10 +4,21 @@
 //-- Function evaluator (objective function) for the Modular Robot
 //--
 
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
 
 #include <ecf/ECF.h>
 
 
+//-- This will allow us to request the same mssg queue for both programs
+#define MSSG_QUEUE_KEY 0
 
 /*!
  *  \class ModularRobotEvalOp
@@ -40,9 +51,12 @@ class ModularRobotEvalOp : public EvaluateOp
         int n_modules;
         unsigned long max_runtime;
         float timestep;
-        std::string config_file;
+        std::string simulator_command;
+        std::string parameter_files_folder;
+        std::string parameter_files_prefix;
 
-    private:
+ private:
         //! \brief Extract the oscillator parameters encoded in the genotype and write them in files
-        void genotypeToRobot(FloatingPoint::FloatingPoint* genotype);
+        void recordParameters(FloatingPoint::FloatingPoint *genotype);
+
 };

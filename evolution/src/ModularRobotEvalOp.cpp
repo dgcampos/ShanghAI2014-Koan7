@@ -25,7 +25,9 @@ void ModularRobotEvalOp::registerParameters(StateP state)
     state->getRegistry()->registerEntry("robot.modules", (voidP) (new uint(1)), ECF::UINT, "Number of modules" );
     state->getRegistry()->registerEntry("robot.runtime", (voidP) (new uint(10000)), ECF::UINT, "Max robot runtime (ms)" );
     state->getRegistry()->registerEntry("robot.timestep", (voidP) (new float(1.0)), ECF::FLOAT, "Time step (ms)" );
-    state->getRegistry()->registerEntry("robot.configfile", (voidP) (new std::string()), ECF::STRING, "Robot description file");
+    state->getRegistry()->registerEntry("robot.simulationCommand", (voidP) (new std::string()), ECF::STRING, "Command to run the simulator");
+    state->getRegistry()->registerEntry("robot.parameterFilesFolder", (voidP) (new std::string()), ECF::STRING, "Folder to output the parameter files");
+    state->getRegistry()->registerEntry("robot.parameterFilesPrefix", (voidP) (new std::string()), ECF::STRING, "Prefix of the parameter files");
 
     state->getRegistry()->registerEntry("osc.maxamplitude", (voidP) (new uint(90)), ECF::UINT, "Max amplitude of oscillators");
     state->getRegistry()->registerEntry("osc.maxoffset", (voidP) (new uint(90)), ECF::UINT, "Max offset of oscillators");
@@ -57,10 +59,21 @@ bool ModularRobotEvalOp::initialize(StateP state)
     timestep = *((float*) sptr.get() );
     std::cout << "[Evolve] Info: Loaded \"robot.timestep\"="<< timestep << std::endl;
 
-    //-- Gait table file:
-    sptr = state->getRegistry()->getEntry("robot.configfile");
-    config_file = *((std::string*) sptr.get() );
-    std::cout << "[Evolve] Info: Loaded \"robot.configfile\"="<< config_file << std::endl;
+    //-- Simulator command:
+    sptr = state->getRegistry()->getEntry("robot.simulationCommand");
+    simulator_command = *((std::string*) sptr.get() );
+    std::cout << "[Evolve] Info: Loaded \"robot.simulationCommand\"=\""<< simulator_command << "\"" << std::endl;
+
+    //-- Parameter files folder:
+    sptr = state->getRegistry()->getEntry("robot.parameterFilesFolder");
+    parameter_files_folder = *((std::string*) sptr.get() );
+    std::cout << "[Evolve] Info: Loaded \"robot.parameterFilesFolder\"=\""<< parameter_files_folder << "\"" << std::endl;
+
+    //-- Simulator command:
+    sptr = state->getRegistry()->getEntry("robot.parameterFilesPrefix");
+    parameter_files_prefix = *((std::string*) sptr.get() );
+    std::cout << "[Evolve] Info: Loaded \"robot.parameterFilesPrefix\"=\""<< parameter_files_prefix << "\"" << std::endl;
+
 
     //-- Get the oscillator parameters from the registry:
     //---------------------------------------------------------------------------------------
@@ -106,10 +119,44 @@ FitnessP ModularRobotEvalOp::evaluate(IndividualP individual)
 
     /* TODO Convert the values of the genotype from [-1, 1] to be within each parameter limits
      * and record them in different files for different modules. */
+    recordParameters(genotype);
 
     /* TODO Start webots to evaluate the individual */
+    int pid = fork();
+
+    if (pid == -1)
+    {
+        std::cerr << "Error forking the process..." << std::endl;
+        exit(1);
+    }
+    else if (pid == 0)
+    {
+        //-- Call simulator
+        char *arguments[3];
+
+        arguments[0] = new char[simulator_command.size()+1];
+        strcpy(arguments[0], simulator_command.c_str());
+
+        std::stringstream ss;
+        ss << max_runtime;
+        arguments[1] = new char[ss.str().size()+1];
+        strcpy(arguments[1], ss.str().c_str());
+
+        std::stringstream ss2;
+        ss2 << timestep;
+        arguments[2] = new char[ss2.str().size()+1];
+        strcpy(arguments[2], ss2.str().c_str());
+
+        execve(arguments[0], arguments, NULL);
+    }
+
+
 
     /* TODO Wait for webots response */
+    int status;
+    wait(&status);
+
+
 
     //-- Set the fitness value
     fitness->setValue( fitness_value);
@@ -118,8 +165,9 @@ FitnessP ModularRobotEvalOp::evaluate(IndividualP individual)
     return fitness;
 }
 
-void ModularRobotEvalOp::genotypeToRobot(FloatingPoint::FloatingPoint *genotype)
+void ModularRobotEvalOp::recordParameters(FloatingPoint::FloatingPoint *genotype)
 {
+    //-- Convert the values from [-1, 1] to correct intervals and save them
     std::vector<float> amplitudes;
     std::vector<float> offsets;
     std::vector<float> phases;
@@ -138,10 +186,30 @@ void ModularRobotEvalOp::genotypeToRobot(FloatingPoint::FloatingPoint *genotype)
 
     frequency = genotype->realValue[n_modules*3] * max_freq_0_5 + max_freq_0_5;
 
-    //-- Set the parameters to the oscillators:
-    int period = (int) ( 1000.0 / frequency);
+    //-- Record all values to files
+    for (int i=0; i < n_modules; i++)
+    {
+        //-- Open file
+        std::stringstream ss;
+        ss << parameter_files_folder+parameter_files_prefix << i+1 << ".txt";
 
-    for (int i = 0; i < (int) oscillators.size(); i++)
-        oscillators[i]->setParameters( amplitudes[i], offsets[i], phases[i], period);
+        std::ofstream file( ss.str().c_str());
 
+        if (!file.is_open())
+        {
+            std::cerr << "Error opening file... " << std::endl;
+            return;
+        }
+
+        //-- Save values
+        file << amplitudes[i] << std::endl;
+        file << offsets[i] << std::endl;
+        file << phases[i] << std::endl;
+        file << frequency;
+
+        //-- Close file
+        file.close();
+    }
+
+    return;
 }
