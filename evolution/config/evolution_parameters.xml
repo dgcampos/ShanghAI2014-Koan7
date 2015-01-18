@@ -34,8 +34,9 @@
 		<Entry key="robot.runtime">30000</Entry>
 		<Entry key="robot.timestep">25</Entry>
 		<Entry key="robot.simulationCommand">dummy-answer</Entry>
-		<Entry key="robot.parameterFilesFolder">../../controllers/</Entry>
+		<Entry key="robot.parameterFilesFolder">../../controllers/LocomotionController/</Entry>
 		<Entry key="robot.parameterFilesPrefix">module_</Entry>
+		<Entry key="robot.fitnessFilePrefix">fitness</Entry>
 
 		<Entry key="osc.maxamplitude">60</Entry>
 		<Entry key="osc.maxoffset">15</Entry>

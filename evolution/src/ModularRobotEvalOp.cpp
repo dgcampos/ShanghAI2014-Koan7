@@ -28,6 +28,7 @@ void ModularRobotEvalOp::registerParameters(StateP state)
     state->getRegistry()->registerEntry("robot.simulationCommand", (voidP) (new std::string()), ECF::STRING, "Command to run the simulator");
     state->getRegistry()->registerEntry("robot.parameterFilesFolder", (voidP) (new std::string()), ECF::STRING, "Folder to output the parameter files");
     state->getRegistry()->registerEntry("robot.parameterFilesPrefix", (voidP) (new std::string()), ECF::STRING, "Prefix of the parameter files");
+    state->getRegistry()->registerEntry("robot.fitnessFilePrefix", (voidP) (new std::string()), ECF::STRING, "Prefix of the fitness value file");
 
     state->getRegistry()->registerEntry("osc.maxamplitude", (voidP) (new uint(90)), ECF::UINT, "Max amplitude of oscillators");
     state->getRegistry()->registerEntry("osc.maxoffset", (voidP) (new uint(90)), ECF::UINT, "Max offset of oscillators");
@@ -69,10 +70,15 @@ bool ModularRobotEvalOp::initialize(StateP state)
     parameter_files_folder = *((std::string*) sptr.get() );
     std::cout << "[Evolve] Info: Loaded \"robot.parameterFilesFolder\"=\""<< parameter_files_folder << "\"" << std::endl;
 
-    //-- Simulator command:
+    //-- Parameter files prefix:
     sptr = state->getRegistry()->getEntry("robot.parameterFilesPrefix");
     parameter_files_prefix = *((std::string*) sptr.get() );
     std::cout << "[Evolve] Info: Loaded \"robot.parameterFilesPrefix\"=\""<< parameter_files_prefix << "\"" << std::endl;
+
+    //-- Fitness files prefix:
+    sptr = state->getRegistry()->getEntry("robot.fitnessFilePrefix");
+    fitness_file_prefix = *((std::string*) sptr.get() );
+    std::cout << "[Evolve] Info: Loaded \"robot.fitnessFilePrefix\"=\""<< fitness_file_prefix << "\"" << std::endl;
 
 
     //-- Get the oscillator parameters from the registry:
@@ -117,16 +123,16 @@ FitnessP ModularRobotEvalOp::evaluate(IndividualP individual)
     //-- Value to store the fitness (distance travelled)
     double fitness_value = 0;
 
-    /* TODO Convert the values of the genotype from [-1, 1] to be within each parameter limits
+    /* Convert the values of the genotype from [-1, 1] to be within each parameter limits
      * and record them in different files for different modules. */
     recordParameters(genotype);
 
-    /* TODO Start webots to evaluate the individual */
+    /* Start webots to evaluate the individual */
     int pid = fork();
 
     if (pid == -1)
     {
-        std::cerr << "Error forking the process..." << std::endl;
+        std::cerr << "[Evolve] Error forking the process..." << std::endl;
         exit(1);
     }
     else if (pid == 0)
@@ -152,16 +158,31 @@ FitnessP ModularRobotEvalOp::evaluate(IndividualP individual)
 
 
 
-    /* TODO Wait for webots response */
+    /* Wait for webots response */
     int status;
     wait(&status);
 
+    //-- Read fitness value:
+    std::stringstream ss;
+    ss << parameter_files_folder + fitness_file_prefix << ".txt";
 
+    std::ifstream fitness_file(ss.str().c_str() );
+
+    if (fitness_file.is_open())
+    {
+        fitness_file >> fitness_value;
+        fitness_file.close();
+    }
+    else
+    {
+        std::cerr << "[Evolve] Fitness file could not be opened!" << std::endl;
+        exit(1);
+    }
 
     //-- Set the fitness value
     fitness->setValue( fitness_value);
 
-    std::cout << "[Evolve] Return!" << std::endl;
+    //std::cout << "[Evolve] Return!" << std::endl;
     return fitness;
 }
 

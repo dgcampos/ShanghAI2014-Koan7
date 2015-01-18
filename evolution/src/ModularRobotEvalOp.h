@@ -17,9 +17,6 @@
 #include <ecf/ECF.h>
 
 
-//-- This will allow us to request the same mssg queue for both programs
-#define MSSG_QUEUE_KEY 0
-
 /*!
  *  \class ModularRobotEvalOp
  *  \brief Function evaluator (objective function) for the Modular Robot
@@ -54,6 +51,7 @@ class ModularRobotEvalOp : public EvaluateOp
         std::string simulator_command;
         std::string parameter_files_folder;
         std::string parameter_files_prefix;
+        std::string fitness_file_prefix;
 
  private:
         //! \brief Extract the oscillator parameters encoded in the genotype and write them in files
