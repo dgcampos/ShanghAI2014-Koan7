@@ -138,7 +138,7 @@ FitnessP ModularRobotEvalOp::evaluate(IndividualP individual)
     else if (pid == 0)
     {
         //-- Call simulator
-        char *arguments[3];
+        char *arguments[4];
 
         arguments[0] = new char[simulator_command.size()+1];
         strcpy(arguments[0], simulator_command.c_str());
@@ -152,6 +152,8 @@ FitnessP ModularRobotEvalOp::evaluate(IndividualP individual)
         ss2 << timestep;
         arguments[2] = new char[ss2.str().size()+1];
         strcpy(arguments[2], ss2.str().c_str());
+
+        arguments[3] = NULL; //-- By convention
 
         execve(arguments[0], arguments, NULL);
     }
